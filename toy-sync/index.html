@@ -243,7 +243,7 @@
         <button id="scan" disabled>Scan for toys</button>
         <button class="ghost" id="disconnect" disabled>Disconnect</button>
       </div>
-      <div class="hint">Install <a href="https://intiface.com/central/" target="_blank" rel="noopener">Intiface Central</a> (free, open source), press its ▶ Start Server button, then connect here. Close the JoyHub app first: a toy can only hold one Bluetooth connection.</div>
+      <div class="hint">Install <a href="https://intiface.com/central/" target="_blank" rel="noopener">Intiface Central</a> (free, open source; desktop and Android), press its ▶ Start Server button, then connect here. Close the JoyHub app first: a toy can only hold one Bluetooth connection. On Android, keep this tab in the foreground while playing.</div>
       <div id="devices"></div>
       <div class="hint" id="noDevices">No toys yet. Turn the toy on, then Scan.</div>
     </section>
@@ -818,9 +818,18 @@ for (const [id, fmt] of live) {
 for (const id of settingIds) $(id).addEventListener('change', saveSettings);
 $('rate').addEventListener('change', restartTicker);
 
-video.addEventListener('play', () => { if (state.tab === 'audio') ensureAudio(); if (state.audio) state.audio.ctx.resume(); });
-video.addEventListener('pause', zeroNow);
-video.addEventListener('ended', zeroNow);
+video.addEventListener('play', () => { if (state.tab === 'audio') ensureAudio(); if (state.audio) state.audio.ctx.resume(); keepAwake(true); });
+video.addEventListener('pause', () => { zeroNow(); keepAwake(false); });
+video.addEventListener('ended', () => { zeroNow(); keepAwake(false); });
+// Keep the screen on while playing (matters on Android: a sleeping tab stops sending commands).
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && !wakeLock && navigator.wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
+    else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch (_) {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !video.paused && video.src) keepAwake(true); });
 video.addEventListener('seeking', zeroNow);
 function zeroNow() { state.smoothed = 0; state.suctionEnv = 0; }
 
